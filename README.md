@@ -1,39 +1,57 @@
-# Customer Churn
+# Customer Churn: Testing Whether the Data Can Predict Churn
 
-1. Executive Summary:
+**Question:** can we predict which subscribers will churn from their age, gender, location, plan length, monthly bill and usage,
+so that retention offers reach the right customers?
 
-This report presents a focused analysis of customer churn modeling aimed at driving actionable results. Customer churn poses a significant challenge to businesses, directly impacting revenue and growth. By leveraging advanced analytics and predictive modeling, companies can strategically reduce churn rates and enhance customer retention. This report outlines our methodology, key findings, and result-oriented recommendations derived from our customer churn analysis.
+**Answer:** no. This dataset contains no usable churn signal. This repo shows how to establish that rigorously, instead of
+shipping a model that only looks good on training data, and what data would be needed instead.
 
-2. Methodology:
+![Churn rate by feature decile](images/churn_by_decile.png)
 
-Our approach was driven by obtaining meaningful results:
+## Evidence (100,000 subscribers, 49.8% churned)
 
-Data Collection: We collected comprehensive historical customer data, encompassing demographics, transaction history, interactions, and relevant variables.
+| Check | Result |
+|---|---|
+| Churn rate across deciles of age, plan length, bill, usage | stays between 48.8% and 50.8% for every feature |
+| Chi-square test per feature | all p > 0.2 except location (p = 0.034), which doesn't survive a Bonferroni correction for six tests (threshold 0.0083) |
+| Logistic regression, 5-fold CV | ROC-AUC **0.503** |
+| LightGBM, 5-fold CV | ROC-AUC **0.505** |
+| Same models with **shuffled** churn labels | ROC-AUC 0.500 on average, up to 0.505–0.507, so the real models are no better than chance |
 
-Data Preprocessing: Raw data underwent rigorous cleaning, transformation, and strategic feature engineering to ensure high-quality analysis. Utilizing a MinMaxScaler, we standardized the data. Irrelevant features like customer_ID and name were excluded, while categorical variables like location and gender were transformed into numerical data using dummy encoding.
+## What went wrong in the first version
 
-Exploratory Data Analysis: Visualizing data through charts provided valuable insights, guiding the analysis.
+The original notebook (now in `archive/`) reported **99.98% training accuracy and 49% test accuracy** for a decision tree. That gap
+is the classic sign of a model memorizing noise. The random forest and neural network also scored around 50%. The model was still
+pickled and served through FastAPI + ngrok. Those deployment notebooks are kept in `archive/` as an example of the serving setup,
+but the model shouldn't be used for decisions.
 
-Feature Selection: By correlating features with churn, we identified impactful variables. Confusion matrix analysis revealed that direct feature impact on churn was limited.
+## What to collect instead
 
-Model Selection and Training: We rigorously evaluated predictive models, including decision trees, random forests, and neural networks. Model training involved meticulous hyperparameter tuning through cross-validation to prevent overfitting.
+Churn is usually driven by changes in behavior and by friction, not by static demographics. Features worth collecting:
+- usage trend (month-over-month change, not total usage)
+- support tickets and complaints
+- failed or late payments
+- contract type and time until renewal
+- plan downgrades and discount expiry
 
-Model Evaluation: Models were thoroughly evaluated on an independent validation dataset, employing accuracy, precision, recall, and F1-score metrics.
+The notebook's checks (per-feature churn rates → cross-validated models → shuffled-label baseline) apply unchanged once those exist.
 
-3. Key Findings and Result-Oriented Recommendations:
+## Run it
 
-Our analysis yielded critical insights for action:
+```bash
+pip install -r requirements.txt
+# put customer_churn_large_dataset.xlsx in data/ (see data/README.md)
+jupyter nbconvert --to notebook --execute churn_signal_check.ipynb   # ~1 min
+```
 
-Segmentation for Targeted Strategies: Customer segmentation based on tenure, transaction frequency, and interaction history provides the foundation for tailored retention strategies.
+## Files
 
-Personalized Offers for Churn Prevention: Leveraging predictive models, identify potential churners and strategically deploy personalized incentives, discounts, and targeted communication to encourage loyalty.
+```
+churn_signal_check.ipynb     the analysis (executed, with outputs)
+churn_signal_check.py        same notebook as a script (jupytext)
+images/                      charts
+data/README.md               where to get the dataset
+archive/                     first version: EDA + models, FastAPI/ngrok deployment notebooks, pickled model
+```
 
-Enhanced Customer Engagement: Swiftly address complaints and elevate overall customer engagement. Swift issue resolution leads to higher satisfaction and reduced churn.
-
-Continuous Monitoring and Model Enhancement: Implement a system for real-time churn rate monitoring and regular model updates. Customer behavior evolves, necessitating up-to-date models.
-
-4. Result-Oriented Conclusion:
-
-This report underscores a results-driven approach to tackling customer churn. By applying advanced techniques and focusing on actionable outcomes, businesses can effectively address this challenge. This analysis demonstrates that through meticulous examination of historical data and the application of predictive models, businesses can proactively identify potential churners and implement strategies that lead to tangible results.
-
-The outlined recommendations provide clear pathways to drive customer retention and mitigate churn. By executing these strategies, companies stand to achieve substantial positive impacts on their bottom line.
+Tools: pandas, scikit-learn, LightGBM, scipy, matplotlib/seaborn.
